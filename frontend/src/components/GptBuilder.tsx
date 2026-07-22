@@ -67,11 +67,6 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
         <textarea className="field min-h-36" placeholder="Instructions" value={form.instructions || ""} onChange={(e) => set("instructions", e.target.value)} />
         <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"><Upload size={16} />Upload md, docx, csv, or pdf knowledge files<input className="hidden" type="file" multiple accept=".md,.docx,.csv,.pdf" onChange={(e) => readFiles(e.target.files)} /></label>
         <textarea className="field min-h-28" placeholder="Knowledge text" value={form.knowledge || ""} onChange={(e) => set("knowledge", e.target.value)} />
-        <div className="grid grid-cols-2 gap-3">
-          <input className="field" placeholder="Model ID" value={form.model_id || ""} onChange={(e) => set("model_id", e.target.value)} />
-          <input className="field" type="number" step="0.1" min="0" max="2" value={form.temperature ?? 0.7} onChange={(e) => set("temperature", Number(e.target.value))} />
-          <input className="field" type="number" min="64" value={form.max_output_tokens ?? 800} onChange={(e) => set("max_output_tokens", Number(e.target.value))} />
-        </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.enabled ?? true} onChange={(e) => set("enabled", e.target.checked)} />Enabled in Chat</label>
         <div className="flex items-center justify-between text-sm text-zinc-500"><span>{status}</span><Link className="underline" href="/chat">Open Chat</Link></div>
       </div>
