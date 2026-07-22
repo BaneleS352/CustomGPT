@@ -33,4 +33,5 @@ npm install
 npm run dev
 ```
 
-Open `/admin` for the builder and `/chat` for the user chat UI. Tables are created on backend startup for this MVP.
+Open `/chat` for the ChatGPT-style workspace and `/admin` to manage GPTs. There are no roles; every local tester can create, edit, delete, and chat with GPTs. Tables are created on backend startup for this MVP.
+

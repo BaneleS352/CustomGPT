@@ -16,5 +16,10 @@ export default function EditGptPage() {
     api.getGpt(Number(params.id)).then(setGpt).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, [params.id]);
 
-  return <><TopNav section="admin" />{error ? <main className="p-4 text-red-700">{error}</main> : gpt ? <GptBuilder initial={gpt} /> : <main className="p-4 text-zinc-500">Loading...</main>}</>;
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <TopNav section="gpts" />
+      {error ? <main className="p-4 text-red-700">{error}</main> : gpt ? <GptBuilder initial={gpt} /> : <main className="p-4 text-zinc-500">Loading...</main>}
+    </div>
+  );
 }

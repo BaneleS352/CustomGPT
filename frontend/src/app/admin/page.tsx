@@ -24,10 +24,10 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <TopNav section="admin" />
+      <TopNav section="gpts" />
       <main className="mx-auto max-w-6xl p-4">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div><h1 className="text-2xl font-semibold">Admin View</h1><p className="text-sm text-zinc-500">Create and manage GPTs. This MVP is unrestricted.</p></div>
+          <div><h1 className="text-2xl font-semibold">GPTs</h1><p className="text-sm text-zinc-500">Create and manage GPTs. Every local tester has full builder access.</p></div>
           <div className="flex gap-2"><Link className="icon-button" href="/admin/providers"><Settings size={16} />Providers</Link><Link className="icon-button primary" href="/admin/gpts/new"><Plus size={16} />New GPT</Link></div>
         </div>
         {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -39,3 +39,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
