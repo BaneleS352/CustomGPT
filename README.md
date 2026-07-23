@@ -35,3 +35,4 @@ npm run dev
 
 Open `/chat` for the ChatGPT-style workspace and `/admin` to manage GPTs. There are no roles; every local tester can create, edit, delete, and chat with GPTs. Tables are created on backend startup for this MVP.
 
+`backend/customgpt.db` is a local SQLite database and should not be committed. Each clone should create its own local database file at runtime.
