@@ -48,18 +48,15 @@ export default function ChatPage() {
         setGpts(nextGpts);
         setChats(nextChats);
         const param = Number(new URLSearchParams(window.location.search).get("gpt"));
-        const selected = nextGpts.find((gpt) => gpt.id === param) || nextGpts[0];
+        const selected = nextGpts.find((gpt) => gpt.id === param) || null;
         setActiveGptId(selected?.id || null);
-        const existing = nextChats.find((chat) => chat.gpt_id === selected?.id);
+        const existing = selected ? nextChats.find((chat) => chat.gpt_id === selected.id) : null;
         if (existing) api.getChat(existing.id).then(setActiveChat);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, []);
 
-  const activeGpt = useMemo(
-    () => gpts.find((gpt) => gpt.id === activeGptId) || gpts[0] || null,
-    [gpts, activeGptId],
-  );
+  const activeGpt = useMemo(() => gpts.find((gpt) => gpt.id === activeGptId) || null, [gpts, activeGptId]);
   const messages = activeChat?.messages || [];
   const hasMessages = messages.length > 0;
 
@@ -70,7 +67,7 @@ export default function ChatPage() {
   }
 
   function startNewChat() {
-    setActiveGptId(activeGpt?.id || gpts[0]?.id || null);
+    setActiveGptId(null);
     setActiveChat(null);
     setInput("");
     setError("");
@@ -243,9 +240,23 @@ export default function ChatPage() {
 
         {error && <div className="mx-auto mt-5 w-full max-w-3xl rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
+        {hasMessages && activeGpt && (
+          <div className="border-b border-zinc-100 px-16 py-3 dark:border-zinc-900">
+            <div className="mx-auto flex max-w-3xl items-center justify-center gap-3 text-center">
+              <GptAvatar gpt={activeGpt} size="sm" />
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">{activeGpt.name}</div>
+                {activeGpt.description && (
+                  <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">{activeGpt.description}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className={`flex min-h-0 flex-1 ${hasMessages ? "flex-col" : "items-center justify-center px-5 pb-28"}`}>
           {hasMessages ? (
-            <div className="flex-1 overflow-y-auto px-5 pb-32 pt-16">
+            <div className="flex-1 overflow-y-auto px-5 pb-32 pt-10">
               <div className="mx-auto max-w-3xl space-y-6">
                 {messages.map((message) => (
                   <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -293,9 +304,13 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="w-full max-w-5xl text-center">
-              <h1 className="mb-10 text-[30px] font-normal tracking-normal text-zinc-950 dark:text-zinc-50">
-                How can I help you today?
-              </h1>
+              {activeGpt ? (
+                <GptIntro gpt={activeGpt} />
+              ) : (
+                <h1 className="mb-10 text-[30px] font-normal tracking-normal text-zinc-950 dark:text-zinc-50">
+                  How can I help you today?
+                </h1>
+              )}
               <Composer
                 input={input}
                 setInput={setInput}
@@ -322,6 +337,40 @@ export default function ChatPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function GptIntro({ gpt }: { gpt: GPT }) {
+  return (
+    <div className="mx-auto mb-14 max-w-2xl">
+      <div className="flex justify-center">
+        <GptAvatar gpt={gpt} />
+      </div>
+      <h1 className="mt-5 text-[30px] font-semibold tracking-normal text-zinc-950 dark:text-zinc-50">{gpt.name}</h1>
+      {gpt.description && (
+        <p className="mx-auto mt-3 max-w-xl text-[15px] leading-7 text-zinc-700 dark:text-zinc-300">{gpt.description}</p>
+      )}
+      {gpt.provider?.name && (
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+          Powered by {gpt.provider.name}
+          {gpt.model_id ? ` - ${gpt.model_id}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function GptAvatar({ gpt, size = "lg" }: { gpt: GPT; size?: "sm" | "lg" }) {
+  const dimensions = size === "lg" ? "h-14 w-14 text-sm" : "h-9 w-9 text-[11px]";
+  const label = (gpt.avatar || gpt.name || "AI").slice(0, 3).toUpperCase();
+
+  return (
+    <div
+      aria-hidden="true"
+      className={`flex shrink-0 items-center justify-center rounded-full bg-teal-600 font-semibold text-white shadow-sm ${dimensions}`}
+    >
+      {label}
     </div>
   );
 }

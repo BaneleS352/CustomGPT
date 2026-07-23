@@ -4,32 +4,6 @@ from app.models.gpt import GPT, Provider
 from app.schemas.gpt import GPTCreate, GPTUpdate, ProviderCreate, ProviderUpdate
 
 
-DEFAULT_PROVIDERS = [
-    {"name": "OpenAI Compatible", "kind": "openai", "base_url": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY", "default_model": "gpt-4o-mini"},
-    {"name": "Anthropic", "kind": "anthropic", "base_url": "https://api.anthropic.com", "api_key_env": "ANTHROPIC_API_KEY", "default_model": "claude-3-5-sonnet-latest"},
-    {"name": "Google Gemini", "kind": "gemini", "base_url": "https://generativelanguage.googleapis.com", "api_key_env": "GEMINI_API_KEY", "default_model": "gemini-1.5-flash"},
-    {"name": "Ollama", "kind": "ollama", "base_url": "http://localhost:11434", "api_key_env": "", "default_model": "llama3.1"},
-]
-
-
-def seed_defaults(db: Session) -> None:
-    if db.query(Provider).count() == 0:
-        for item in DEFAULT_PROVIDERS:
-            db.add(Provider(**item))
-        db.commit()
-    if db.query(GPT).count() == 0:
-        provider = db.query(Provider).filter(Provider.kind == "openai").first()
-        db.add(GPT(
-            name="Product Helper",
-            description="A general assistant for quick product and engineering thinking.",
-            avatar="PH",
-            instructions="You are concise, practical, and helpful.",
-            provider_id=provider.id if provider else None,
-            model_id=provider.default_model if provider else "gpt-4o-mini",
-        ))
-        db.commit()
-
-
 def list_gpts(db: Session, enabled_only: bool = False):
     query = db.query(GPT).order_by(GPT.updated_at.desc())
     if enabled_only:
