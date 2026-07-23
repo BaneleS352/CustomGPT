@@ -22,6 +22,26 @@ export const api = {
   createGpt: (payload: Partial<GPT>) => json<GPT>("/gpts", { method: "POST", body: JSON.stringify(payload) }),
   updateGpt: (id: number, payload: Partial<GPT>) => json<GPT>(`/gpts/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteGpt: (id: number) => json<{ ok: boolean }>(`/gpts/${id}`, { method: "DELETE" }),
+  uploadKnowledgeFiles: async (files: File[]) => {
+    const payload = {
+      files: await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          content_base64: arrayBufferToBase64(await file.arrayBuffer()),
+        })),
+      ),
+    };
+    const res = await fetch(`${API_URL}/gpts/knowledge-files/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(payload.detail || "Knowledge upload failed");
+    }
+    return res.json() as Promise<{ files: Array<{ name: string; content: string }> }>;
+  },
   listProviders: () => json<Provider[]>("/providers"),
   createProvider: (payload: Partial<Provider>) => json<Provider>("/providers", { method: "POST", body: JSON.stringify(payload) }),
   updateProvider: (id: number, payload: Partial<Provider>) => json<Provider>(`/providers/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
@@ -32,6 +52,13 @@ export const api = {
   createChat: (gptId: number) => json<Chat>("/chats", { method: "POST", body: JSON.stringify({ gpt_id: gptId, title: "New chat" }) }),
   deleteChat: (id: number) => json<{ ok: boolean }>(`/chats/${id}`, { method: "DELETE" }),
 };
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
 
 export async function streamMessage(chatId: number, content: string, onDelta: (text: string) => void, signal?: AbortSignal) {
   const res = await fetch(`${API_URL}/chats/${chatId}/stream`, {

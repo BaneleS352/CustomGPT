@@ -10,7 +10,7 @@ from app.models.chat import Chat
 from app.models.message import Message
 from app.schemas.chat import ChatCreate, ChatRead, SendMessage
 from app.services.chat_service import add_message, create_chat, delete_chat, get_chat, list_chats
-from app.services.gpt_service import get_gpt
+from app.services.gpt_service import format_knowledge_for_prompt, get_gpt
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -72,7 +72,7 @@ def stream(chat_id: int, payload: SendMessage, db: Session = Depends(get_db)):
     messages = [NormalizedMessage(role=m.role, content=m.content) for m in chat.messages]
     request = NormalizedRequest(
         messages=messages,
-        instructions=f"{chat.gpt.instructions}\n\nKnowledge:\n{chat.gpt.knowledge}".strip(),
+        instructions=f"{chat.gpt.instructions}\n\nKnowledge:\n{format_knowledge_for_prompt(chat.gpt.knowledge)}".strip(),
         model=chat.gpt.model_id or chat.gpt.provider.default_model,
         temperature=chat.gpt.temperature,
         max_output_tokens=chat.gpt.max_output_tokens,

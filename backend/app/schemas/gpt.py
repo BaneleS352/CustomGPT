@@ -33,6 +33,24 @@ class ProviderRead(ProviderBase):
         from_attributes = True
 
 
+class KnowledgeFileRead(BaseModel):
+    name: str
+    content: str
+
+
+class KnowledgeExtractFile(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    content_base64: str = Field(min_length=1)
+
+
+class KnowledgeExtractCreate(BaseModel):
+    files: list[KnowledgeExtractFile] = Field(min_length=1)
+
+
+class KnowledgeExtractRead(BaseModel):
+    files: list[KnowledgeFileRead]
+
+
 class GPTBase(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = ""

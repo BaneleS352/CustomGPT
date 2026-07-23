@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.llm import get_provider_adapter
 from app.models.gpt import GPT
-from app.schemas.gpt import GPTCreate, GPTRead, GPTUpdate, ProviderCreate, ProviderRead, ProviderUpdate
+from app.schemas.gpt import GPTCreate, GPTRead, GPTUpdate, KnowledgeExtractCreate, KnowledgeExtractRead, ProviderCreate, ProviderRead, ProviderUpdate
 from app.services.gpt_service import (
     create_gpt,
+    extract_knowledge_files,
     create_provider,
     get_gpt,
     get_provider,
@@ -30,6 +31,11 @@ def create(payload: GPTCreate, db: Session = Depends(get_db)):
     if payload.provider_id and not get_provider(db, payload.provider_id):
         raise HTTPException(status_code=400, detail="Provider not found")
     return create_gpt(db, payload)
+
+
+@router.post("/knowledge-files/extract", response_model=KnowledgeExtractRead)
+def knowledge_files_extract(payload: KnowledgeExtractCreate):
+    return {"files": extract_knowledge_files([item.model_dump() for item in payload.files])}
 
 
 @router.get("/{gpt_id}", response_model=GPTRead)
