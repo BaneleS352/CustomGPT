@@ -23,24 +23,36 @@ export const api = {
   updateGpt: (id: number, payload: Partial<GPT>) => json<GPT>(`/gpts/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteGpt: (id: number) => json<{ ok: boolean }>(`/gpts/${id}`, { method: "DELETE" }),
   uploadKnowledgeFiles: async (files: File[]) => {
-    const payload = {
-      files: await Promise.all(
-        files.map(async (file) => ({
-          name: file.name,
-          content_base64: arrayBufferToBase64(await file.arrayBuffer()),
-        })),
-      ),
-    };
-    const res = await fetch(`${API_URL}/gpts/knowledge-files/extract`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(payload.detail || "Knowledge upload failed");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    try {
+      const payload = {
+        files: await Promise.all(
+          files.map(async (file) => ({
+            name: file.name,
+            content_base64: arrayBufferToBase64(await file.arrayBuffer()),
+          })),
+        ),
+      };
+      const res = await fetch(`${API_URL}/gpts/knowledge-files/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(payload.detail || "Knowledge upload failed");
+      }
+      return res.json() as Promise<{ files: Array<{ name: string; content: string }> }>;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Knowledge upload timed out. Check that the backend is running and try a smaller file.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
     }
-    return res.json() as Promise<{ files: Array<{ name: string; content: string }> }>;
   },
   listProviders: () => json<Provider[]>("/providers"),
   createProvider: (payload: Partial<Provider>) => json<Provider>("/providers", { method: "POST", body: JSON.stringify(payload) }),
@@ -56,7 +68,10 @@ export const api = {
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
   return btoa(binary);
 }
 

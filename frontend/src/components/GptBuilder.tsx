@@ -58,6 +58,7 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
     initial ? { ...initial, knowledge: initialKnowledge.notes } : empty,
   );
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>(initialKnowledge.files);
+  const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState("");
 
   function set<K extends keyof GPT>(key: K, value: GPT[K]) {
@@ -81,16 +82,21 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
     }
   }
 
-  async function readFiles(files: FileList | null) {
+  async function readFiles(files: FileList | null, onDone?: () => void) {
     if (!files) return;
+    const uploadedFiles = Array.from(files);
+    if (uploadedFiles.length === 0) return;
+    setUploading(true);
     setStatus("Uploading knowledge files...");
     try {
-      const uploadedFiles = Array.from(files);
       const result = await api.uploadKnowledgeFiles(uploadedFiles);
       setKnowledgeFiles((current) => [...current, ...result.files]);
       setStatus(`Attached locally: ${result.files.map((file) => file.name).join(", ")}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Knowledge upload failed");
+    } finally {
+      setUploading(false);
+      onDone?.();
     }
   }
 
@@ -107,7 +113,7 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
         <input className="field" placeholder="Name" value={form.name || ""} onChange={(e) => set("name", e.target.value)} />
         <textarea className="field min-h-20" placeholder="Description" value={form.description || ""} onChange={(e) => set("description", e.target.value)} />
         <textarea className="field min-h-36" placeholder="Instructions" value={form.instructions || ""} onChange={(e) => set("instructions", e.target.value)} />
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"><Upload size={16} />Upload md, docx, csv, or pdf knowledge files<input className="hidden" type="file" multiple accept=".md,.docx,.csv,.pdf" onChange={(e) => readFiles(e.target.files)} /></label>
+        <label className={`flex items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 ${uploading ? "cursor-wait opacity-70" : "cursor-pointer"}`}><Upload size={16} />{uploading ? "Uploading knowledge files..." : "Upload md, docx, csv, or pdf knowledge files"}<input className="hidden" type="file" multiple accept=".md,.docx,.csv,.pdf" disabled={uploading} onChange={(e) => readFiles(e.target.files, () => { e.currentTarget.value = ""; })} /></label>
         {knowledgeFiles.length > 0 && (
           <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
             {knowledgeFiles.map((file) => (

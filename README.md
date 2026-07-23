@@ -6,6 +6,8 @@ A simple unrestricted MVP with a FastAPI backend and Next.js frontend.
 
 Backend:
 
+Create a local PostgreSQL database named `customgpt`, then set the backend environment variables. You can put these values in `backend/.env`.
+
 ```powershell
 $env:DATABASE_URL="postgresql+psycopg2://postgres:postgres@localhost:5432/customgpt"
 $env:OPENAI_API_KEY="sk-..."
@@ -35,4 +37,4 @@ npm run dev
 
 Open `/chat` for the ChatGPT-style workspace and `/admin` to manage GPTs. There are no roles; every local tester can create, edit, delete, and chat with GPTs. Tables are created on backend startup for this MVP.
 
-`backend/customgpt.db` is a local SQLite database and should not be committed. Each clone should create its own local database file at runtime.
+The app uses PostgreSQL. Do not commit local database files such as `backend/customgpt.db`; each developer should connect to their own local PostgreSQL database.
