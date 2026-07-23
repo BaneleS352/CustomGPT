@@ -10,6 +10,12 @@ export type Provider = {
   enabled: boolean;
 };
 
+export type KnowledgeFile = {
+  id?: number | null;
+  name: string;
+  content: string;
+};
+
 export type GPT = {
   id: number;
   name: string;
@@ -23,6 +29,7 @@ export type GPT = {
   temperature: number;
   max_output_tokens: number;
   provider?: Provider | null;
+  knowledge_files?: KnowledgeFile[];
 };
 
 export type Message = {

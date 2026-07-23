@@ -8,9 +8,9 @@ from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.models.gpt import GPT, Provider
+from app.models.gpt import GPT, KnowledgeFile, Provider
 from app.schemas.gpt import GPTCreate, GPTUpdate, ProviderCreate, ProviderUpdate
 
 KNOWLEDGE_PREFIX = "<<<CUSTOMGPT_KNOWLEDGE_V1>>>"
@@ -18,27 +18,41 @@ KNOWLEDGE_SUFFIX = "<<<END_CUSTOMGPT_KNOWLEDGE_V1>>>"
 
 
 def list_gpts(db: Session, enabled_only: bool = False):
-    query = db.query(GPT).order_by(GPT.updated_at.desc())
+    query = db.query(GPT).options(selectinload(GPT.knowledge_files)).order_by(GPT.updated_at.desc())
     if enabled_only:
         query = query.filter(GPT.enabled.is_(True))
-    return query.all()
+    gpts = query.all()
+    for gpt in gpts:
+        _migrate_legacy_knowledge_payload(db, gpt)
+    return gpts
 
 
 def get_gpt(db: Session, gpt_id: int):
-    return db.get(GPT, gpt_id)
+    gpt = db.query(GPT).options(selectinload(GPT.knowledge_files)).filter(GPT.id == gpt_id).first()
+    if gpt:
+        _migrate_legacy_knowledge_payload(db, gpt)
+    return gpt
 
 
 def create_gpt(db: Session, payload: GPTCreate):
-    gpt = GPT(**payload.model_dump())
+    data = payload.model_dump()
+    knowledge_files = data.pop("knowledge_files", [])
+    gpt = GPT(**data)
     db.add(gpt)
+    _replace_knowledge_files(gpt, knowledge_files)
     db.commit()
     db.refresh(gpt)
     return gpt
 
 
 def update_gpt(db: Session, gpt: GPT, payload: GPTUpdate):
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    _migrate_legacy_knowledge_payload(db, gpt)
+    updates = payload.model_dump(exclude_unset=True)
+    knowledge_files = updates.pop("knowledge_files", None)
+    for key, value in updates.items():
         setattr(gpt, key, value)
+    if knowledge_files is not None:
+        _replace_knowledge_files(gpt, knowledge_files)
     db.commit()
     db.refresh(gpt)
     return gpt
@@ -105,6 +119,18 @@ def format_knowledge_for_prompt(value: str) -> str:
         sections.append(f"Notes:\n{notes.strip()}")
     if files:
         file_blocks = [f"File: {item['name']}\n{item['content'].strip()}".strip() for item in files if item.get("content", "").strip()]
+        if file_blocks:
+            sections.append("Knowledge files:\n" + "\n\n".join(file_blocks))
+    return "\n\n".join(sections).strip()
+
+
+def format_gpt_knowledge_for_prompt(gpt: GPT) -> str:
+    _migrate_legacy_knowledge_payload(None, gpt)
+    sections: list[str] = []
+    if (gpt.knowledge or "").strip():
+        sections.append(f"Notes:\n{gpt.knowledge.strip()}")
+    if gpt.knowledge_files:
+        file_blocks = [f"File: {item.name}\n{item.content.strip()}".strip() for item in gpt.knowledge_files if item.content.strip()]
         if file_blocks:
             sections.append("Knowledge files:\n" + "\n\n".join(file_blocks))
     return "\n\n".join(sections).strip()
@@ -225,3 +251,28 @@ def _decode_pdf_literal(value: str) -> str:
         value = value.replace(key, replacement)
     value = re.sub(r"\\([0-7]{1,3})", lambda match: chr(int(match.group(1), 8)), value)
     return value
+
+
+def _replace_knowledge_files(gpt: GPT, files: list[dict[str, str]]) -> None:
+    gpt.knowledge_files.clear()
+    for item in files:
+        gpt.knowledge_files.append(
+            KnowledgeFile(
+                name=item.get("name", "").strip(),
+                content=item.get("content", ""),
+            )
+        )
+
+
+def _migrate_legacy_knowledge_payload(db: Session | None, gpt: GPT) -> None:
+    parsed = parse_knowledge_payload(gpt.knowledge or "")
+    if not parsed:
+        return
+    notes, files = parsed
+    if not gpt.knowledge_files and files:
+        _replace_knowledge_files(gpt, files)
+    gpt.knowledge = notes
+    if db is not None:
+        db.add(gpt)
+        db.commit()
+        db.refresh(gpt)

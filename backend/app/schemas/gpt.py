@@ -34,8 +34,14 @@ class ProviderRead(ProviderBase):
 
 
 class KnowledgeFileRead(BaseModel):
+    id: int | None = None
     name: str
     content: str
+
+
+class KnowledgeFileWrite(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    content: str = ""
 
 
 class KnowledgeExtractFile(BaseModel):
@@ -62,6 +68,7 @@ class GPTBase(BaseModel):
     model_id: str = ""
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_output_tokens: int = Field(default=800, ge=64, le=8000)
+    knowledge_files: list[KnowledgeFileWrite] = []
 
 
 class GPTCreate(GPTBase):
@@ -79,6 +86,7 @@ class GPTUpdate(BaseModel):
     model_id: str | None = None
     temperature: float | None = Field(default=None, ge=0, le=2)
     max_output_tokens: int | None = Field(default=None, ge=64, le=8000)
+    knowledge_files: list[KnowledgeFileWrite] | None = None
 
 
 class GPTRead(GPTBase):
@@ -86,6 +94,7 @@ class GPTRead(GPTBase):
     created_at: datetime
     updated_at: datetime
     provider: ProviderRead | None = None
+    knowledge_files: list[KnowledgeFileRead] = []
 
     class Config:
         from_attributes = True

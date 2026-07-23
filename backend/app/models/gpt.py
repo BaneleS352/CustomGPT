@@ -25,6 +25,20 @@ class GPT(Base):
 
     provider = relationship("Provider", back_populates="gpts")
     chats = relationship("Chat", back_populates="gpt", cascade="all, delete-orphan")
+    knowledge_files = relationship("KnowledgeFile", back_populates="gpt", cascade="all, delete-orphan")
+
+
+class KnowledgeFile(Base):
+    __tablename__ = "knowledge_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    gpt_id: Mapped[int] = mapped_column(ForeignKey("gpts.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    gpt = relationship("GPT", back_populates="knowledge_files")
 
 
 class Provider(Base):

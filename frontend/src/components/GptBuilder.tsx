@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Save, Upload } from "lucide-react";
 import { api } from "@/lib/api";
-import type { GPT } from "@/lib/types";
+import type { GPT, KnowledgeFile } from "@/lib/types";
 
 const empty: Partial<GPT> = {
   name: "",
@@ -20,44 +20,12 @@ const empty: Partial<GPT> = {
   max_output_tokens: 800,
 };
 
-const KNOWLEDGE_PREFIX = "<<<CUSTOMGPT_KNOWLEDGE_V1>>>";
-const KNOWLEDGE_SUFFIX = "<<<END_CUSTOMGPT_KNOWLEDGE_V1>>>";
-
-type KnowledgeFile = {
-  name: string;
-  content: string;
-};
-
-function parseKnowledge(value: string | undefined) {
-  const knowledge = value || "";
-  if (!knowledge.startsWith(KNOWLEDGE_PREFIX) || !knowledge.endsWith(KNOWLEDGE_SUFFIX)) {
-    return { notes: knowledge, files: [] as KnowledgeFile[] };
-  }
-  const body = knowledge.slice(KNOWLEDGE_PREFIX.length, knowledge.lastIndexOf(KNOWLEDGE_SUFFIX)).trim();
-  try {
-    const parsed = JSON.parse(body) as { notes?: string; files?: KnowledgeFile[] };
-    return {
-      notes: typeof parsed.notes === "string" ? parsed.notes : "",
-      files: Array.isArray(parsed.files)
-        ? parsed.files.filter((item) => item && typeof item.name === "string" && typeof item.content === "string")
-        : [],
-    };
-  } catch {
-    return { notes: knowledge, files: [] as KnowledgeFile[] };
-  }
-}
-
-function serializeKnowledge(notes: string, files: KnowledgeFile[]) {
-  return `${KNOWLEDGE_PREFIX}\n${JSON.stringify({ notes, files })}\n${KNOWLEDGE_SUFFIX}`;
-}
-
 export function GptBuilder({ initial }: { initial?: GPT }) {
   const router = useRouter();
-  const initialKnowledge = parseKnowledge(initial?.knowledge);
   const [form, setForm] = useState<Partial<GPT>>(
-    initial ? { ...initial, knowledge: initialKnowledge.notes } : empty,
+    initial ? { ...initial, knowledge: initial.knowledge || "" } : empty,
   );
-  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>(initialKnowledge.files);
+  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>(initial?.knowledge_files || []);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -70,7 +38,11 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
     try {
       const payload = {
         ...form,
-        knowledge: serializeKnowledge(form.knowledge || "", knowledgeFiles),
+        knowledge: form.knowledge || "",
+        knowledge_files: knowledgeFiles.map((file) => ({
+          name: file.name,
+          content: file.content,
+        })),
         provider_id: null,
         model_id: form.model_id || "",
       };
@@ -113,7 +85,7 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
         <input className="field" placeholder="Name" value={form.name || ""} onChange={(e) => set("name", e.target.value)} />
         <textarea className="field min-h-20" placeholder="Description" value={form.description || ""} onChange={(e) => set("description", e.target.value)} />
         <textarea className="field min-h-36" placeholder="Instructions" value={form.instructions || ""} onChange={(e) => set("instructions", e.target.value)} />
-        <label className={`flex items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 ${uploading ? "cursor-wait opacity-70" : "cursor-pointer"}`}><Upload size={16} />{uploading ? "Uploading knowledge files..." : "Upload md, docx, csv, or pdf knowledge files"}<input className="hidden" type="file" multiple accept=".md,.docx,.csv,.pdf" disabled={uploading} onChange={(e) => readFiles(e.target.files, () => { e.currentTarget.value = ""; })} /></label>
+        <label className={`flex items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 ${uploading ? "cursor-wait opacity-70" : "cursor-pointer"}`}><Upload size={16} />{uploading ? "Uploading knowledge files..." : "Upload md, docx, csv, or pdf knowledge files"}<input className="hidden" type="file" multiple accept=".md,.docx,.csv,.pdf" disabled={uploading} onChange={(e) => { const input = e.currentTarget; void readFiles(input.files, () => { input.value = ""; }); }} /></label>
         {knowledgeFiles.length > 0 && (
           <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
             {knowledgeFiles.map((file) => (
