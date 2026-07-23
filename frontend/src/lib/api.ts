@@ -24,7 +24,7 @@ export const api = {
   deleteGpt: (id: number) => json<{ ok: boolean }>(`/gpts/${id}`, { method: "DELETE" }),
   uploadKnowledgeFiles: async (files: File[]) => {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     try {
       const payload = {
         files: await Promise.all(
@@ -47,7 +47,7 @@ export const api = {
       return res.json() as Promise<{ files: Array<{ name: string; content: string }> }>;
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error("Knowledge upload timed out. Check that the backend is running and try a smaller file.");
+        throw new Error("Knowledge upload timed out. Check that the backend is running and try again.");
       }
       throw error;
     } finally {
