@@ -10,7 +10,7 @@ from app.models.chat import Chat
 from app.models.message import Message
 from app.schemas.chat import ChatCreate, ChatRead, SendMessage
 from app.services.chat_service import add_message, create_chat, delete_chat, get_chat, list_chats
-from app.services.gpt_service import format_gpt_knowledge_for_prompt, get_gpt
+from app.services.gpt_service import format_retrieved_knowledge_for_prompt, get_gpt, retrieve_knowledge_chunks
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -69,10 +69,18 @@ def stream(chat_id: int, payload: SendMessage, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Provider is not configured or disabled")
 
     add_message(db, chat, "user", payload.content)
+    retrieved_chunks = retrieve_knowledge_chunks(db, chat.gpt_id, payload.content)
+    knowledge_prompt = format_retrieved_knowledge_for_prompt(chat.gpt, retrieved_chunks)
+    system_parts = [
+        chat.gpt.instructions,
+        "Use retrieved knowledge excerpts when they are relevant. If the uploaded files do not contain the answer, say you do not know from the provided knowledge.",
+    ]
+    if knowledge_prompt:
+        system_parts.append(f"Knowledge:\n{knowledge_prompt}")
     messages = [NormalizedMessage(role=m.role, content=m.content) for m in chat.messages]
     request = NormalizedRequest(
         messages=messages,
-        instructions=f"{chat.gpt.instructions}\n\nKnowledge:\n{format_gpt_knowledge_for_prompt(chat.gpt)}".strip(),
+        instructions="\n\n".join(part.strip() for part in system_parts if part and part.strip()),
         model=chat.gpt.model_id or chat.gpt.provider.default_model,
         temperature=chat.gpt.temperature,
         max_output_tokens=chat.gpt.max_output_tokens,

@@ -26,19 +26,40 @@ class GPT(Base):
     provider = relationship("Provider", back_populates="gpts")
     chats = relationship("Chat", back_populates="gpt", cascade="all, delete-orphan")
     knowledge_files = relationship("KnowledgeFile", back_populates="gpt", cascade="all, delete-orphan")
+    knowledge_chunks = relationship("KnowledgeChunk", back_populates="gpt", cascade="all, delete-orphan")
+
+    @property
+    def chunk_count(self) -> int:
+        return len(self.knowledge_chunks or [])
 
 
 class KnowledgeFile(Base):
     __tablename__ = "knowledge_files"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    gpt_id: Mapped[int] = mapped_column(ForeignKey("gpts.id"), nullable=False, index=True)
+    gpt_id: Mapped[int] = mapped_column(ForeignKey("gpts.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     gpt = relationship("GPT", back_populates="knowledge_files")
+    chunks = relationship("KnowledgeChunk", back_populates="knowledge_file", cascade="all, delete-orphan")
+
+
+class KnowledgeChunk(Base):
+    __tablename__ = "knowledge_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    gpt_id: Mapped[int] = mapped_column(ForeignKey("gpts.id", ondelete="CASCADE"), nullable=False, index=True)
+    knowledge_file_id: Mapped[int] = mapped_column(ForeignKey("knowledge_files.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="")
+    char_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    gpt = relationship("GPT", back_populates="knowledge_chunks")
+    knowledge_file = relationship("KnowledgeFile", back_populates="chunks")
 
 
 class Provider(Base):

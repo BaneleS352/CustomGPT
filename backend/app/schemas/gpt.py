@@ -95,6 +95,7 @@ class GPTRead(GPTBase):
     updated_at: datetime
     provider: ProviderRead | None = None
     knowledge_files: list[KnowledgeFileRead] = []
+    chunk_count: int = 0
 
     class Config:
         from_attributes = True

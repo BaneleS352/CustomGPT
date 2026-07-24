@@ -20,6 +20,9 @@ const empty: Partial<GPT> = {
   max_output_tokens: 800,
 };
 
+const SUPPORTED_KNOWLEDGE_EXTENSIONS = [".md", ".txt", ".docx", ".csv", ".pdf", ".xlsx"];
+const SUPPORTED_KNOWLEDGE_LABEL = "MD, TXT, DOCX, CSV, PDF, or XLSX";
+
 type KnowledgeFileItem = KnowledgeFile & {
   key: string;
   size?: number;
@@ -77,6 +80,12 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
     if (!files) return;
     const uploadedFiles = Array.from(files);
     if (uploadedFiles.length === 0) return;
+    const invalidFiles = uploadedFiles.filter((file) => !isSupportedKnowledgeFile(file.name));
+    if (invalidFiles.length > 0) {
+      setStatus(`Unsupported file type: ${invalidFiles.map((file) => file.name).join(", ")}. Please upload ${SUPPORTED_KNOWLEDGE_LABEL} files.`);
+      onDone?.();
+      return;
+    }
     const pendingFiles = uploadedFiles.map((file) => ({
       key: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
       name: file.name,
@@ -127,7 +136,7 @@ export function GptBuilder({ initial }: { initial?: GPT }) {
         <input className="field" placeholder="Name" value={form.name || ""} onChange={(e) => set("name", e.target.value)} />
         <textarea className="field min-h-20" placeholder="Description" value={form.description || ""} onChange={(e) => set("description", e.target.value)} />
         <textarea className="field min-h-36" placeholder="Instructions" value={form.instructions || ""} onChange={(e) => set("instructions", e.target.value)} />
-        <label className={`flex items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 ${uploading ? "cursor-wait opacity-70" : "cursor-pointer"}`}><Upload size={16} />{uploading ? "Uploading knowledge files..." : "Upload md, docx, csv, or pdf knowledge files"}<input className="hidden" type="file" multiple accept=".md,.docx,.csv,.pdf" disabled={uploading} onChange={(e) => { const input = e.currentTarget; void readFiles(input.files, () => { input.value = ""; }); }} /></label>
+        <label className={`flex items-center gap-2 rounded-md border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 ${uploading ? "cursor-wait opacity-70" : "cursor-pointer"}`}><Upload size={16} />{uploading ? "Uploading knowledge files..." : `Upload knowledge files (${SUPPORTED_KNOWLEDGE_LABEL})`}<input className="hidden" type="file" multiple accept={SUPPORTED_KNOWLEDGE_EXTENSIONS.join(",")} disabled={uploading} onChange={(e) => { const input = e.currentTarget; void readFiles(input.files, () => { input.value = ""; }); }} /></label>
         {knowledgeFiles.length > 0 && (
           <div className="space-y-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
             {knowledgeFiles.map((file) => (
@@ -168,4 +177,9 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isSupportedKnowledgeFile(filename: string) {
+  const lowerName = filename.toLowerCase();
+  return SUPPORTED_KNOWLEDGE_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
 }

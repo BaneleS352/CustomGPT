@@ -30,6 +30,7 @@ export type GPT = {
   max_output_tokens: number;
   provider?: Provider | null;
   knowledge_files?: KnowledgeFile[];
+  chunk_count?: number;
 };
 
 export type Message = {
