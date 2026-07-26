@@ -1,3 +1,26 @@
+# Local database
 customgpt.db
+*.sqlite3
+
+# Environments
 .env
+.env.local
 venv/
+env/
+.venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking
+.mypy_cache/
+
+# OS files
+.DS_Store
