@@ -13,13 +13,24 @@ export default function EditGptPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.getGpt(Number(params.id)).then(setGpt).catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+    api
+      .getGpt(Number(params.id))
+      .then(setGpt)
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to load"),
+      );
   }, [params.id]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-background">
       <TopNav section="gpts" />
-      {error ? <main className="p-4 text-red-700">{error}</main> : gpt ? <GptBuilder initial={gpt} /> : <main className="p-4 text-zinc-500">Loading...</main>}
+      {error ? (
+        <main className="p-4 text-red-700">{error}</main>
+      ) : gpt ? (
+        <GptBuilder initial={gpt} />
+      ) : (
+        <main className="p-4 text-muted-foreground">Loading...</main>
+      )}
     </div>
   );
 }

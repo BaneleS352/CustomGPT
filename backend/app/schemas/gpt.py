@@ -36,10 +36,10 @@ class ProviderRead(ProviderBase):
 class KnowledgeFileRead(BaseModel):
     id: int | None = None
     name: str
-    content: str
 
 
 class KnowledgeFileWrite(BaseModel):
+    id: int | None = None
     name: str = Field(min_length=1, max_length=255)
     content: str = ""
 

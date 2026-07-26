@@ -10,6 +10,7 @@ from zipfile import BadZipFile, ZipFile
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
+from app.llm.providers import get_provider_adapter
 from app.models.gpt import GPT, KnowledgeChunk, KnowledgeFile, Provider
 from app.schemas.gpt import GPTCreate, GPTUpdate, ProviderCreate, ProviderUpdate
 
@@ -19,43 +20,6 @@ CHUNK_TARGET_CHARS = 950
 CHUNK_MAX_CHARS = 1200
 CHUNK_OVERLAP_CHARS = 150
 MAX_RETRIEVED_CHUNKS = 5
-TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9'-]{1,}", re.IGNORECASE)
-STOPWORDS = {
-    "about",
-    "after",
-    "also",
-    "and",
-    "are",
-    "can",
-    "could",
-    "does",
-    "for",
-    "from",
-    "have",
-    "how",
-    "into",
-    "is",
-    "it",
-    "its",
-    "me",
-    "more",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "their",
-    "this",
-    "to",
-    "what",
-    "when",
-    "where",
-    "which",
-    "with",
-    "you",
-    "your",
-}
-
 
 def list_gpts(db: Session, enabled_only: bool = False):
     query = db.query(GPT).options(selectinload(GPT.knowledge_files), selectinload(GPT.knowledge_chunks)).order_by(GPT.updated_at.desc())
@@ -79,7 +43,7 @@ def create_gpt(db: Session, payload: GPTCreate):
     knowledge_files = data.pop("knowledge_files", [])
     gpt = GPT(**data)
     db.add(gpt)
-    _replace_knowledge_files(gpt, knowledge_files)
+    _replace_knowledge_files(db, gpt, knowledge_files)
     db.commit()
     db.refresh(gpt)
     return gpt
@@ -92,7 +56,7 @@ def update_gpt(db: Session, gpt: GPT, payload: GPTUpdate):
     for key, value in updates.items():
         setattr(gpt, key, value)
     if knowledge_files is not None:
-        _replace_knowledge_files(gpt, knowledge_files)
+        _replace_knowledge_files(db, gpt, knowledge_files)
     db.commit()
     db.refresh(gpt)
     return gpt
@@ -164,16 +128,6 @@ def format_knowledge_for_prompt(value: str) -> str:
     return "\n\n".join(sections).strip()
 
 
-def format_gpt_knowledge_for_prompt(gpt: GPT) -> str:
-    _migrate_legacy_knowledge_payload(None, gpt)
-    sections: list[str] = []
-    if (gpt.knowledge or "").strip():
-        sections.append(f"Notes:\n{gpt.knowledge.strip()}")
-    if gpt.knowledge_files:
-        file_blocks = [f"File: {item.name}\n{item.content.strip()}".strip() for item in gpt.knowledge_files if item.content.strip()]
-        if file_blocks:
-            sections.append("Knowledge files:\n" + "\n\n".join(file_blocks))
-    return "\n\n".join(sections).strip()
 
 
 def format_retrieved_knowledge_for_prompt(gpt: GPT, chunks: list[KnowledgeChunk]) -> str:
@@ -190,20 +144,23 @@ def format_retrieved_knowledge_for_prompt(gpt: GPT, chunks: list[KnowledgeChunk]
 
 
 def retrieve_knowledge_chunks(db: Session, gpt_id: int, query_text: str, limit: int = MAX_RETRIEVED_CHUNKS) -> list[KnowledgeChunk]:
-    query_tokens = _tokenize(query_text)
-    if not query_tokens:
+    if not query_text.strip():
         return []
+
+    gpt = db.query(GPT).options(selectinload(GPT.provider)).filter(GPT.id == gpt_id).first()
+    provider_config = gpt.provider if gpt and gpt.provider else Provider(kind="openai", api_key_env="OPENAI_API_KEY")
+    provider = get_provider_adapter(provider_config)
+    query_embedding = provider.embed_texts([query_text])[0]
 
     chunks = (
         db.query(KnowledgeChunk)
         .options(selectinload(KnowledgeChunk.knowledge_file))
         .filter(KnowledgeChunk.gpt_id == gpt_id)
+        .order_by(KnowledgeChunk.embedding.cosine_distance(query_embedding))
+        .limit(limit)
         .all()
     )
-    scored = [(_score_chunk(chunk.content, query_tokens, query_text), chunk) for chunk in chunks if chunk.content.strip()]
-    scored = [(score, chunk) for score, chunk in scored if score > 0]
-    scored.sort(key=lambda item: (item[0], -item[1].chunk_index), reverse=True)
-    return [chunk for _, chunk in scored[:limit]]
+    return chunks
 
 
 def extract_knowledge_files(files: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -383,24 +340,46 @@ def _decode_pdf_literal(value: str) -> str:
     return value
 
 
-def _replace_knowledge_files(gpt: GPT, files: list[dict[str, str]]) -> None:
-    gpt.knowledge_chunks.clear()
-    gpt.knowledge_files.clear()
-    for item in files:
-        knowledge_file = KnowledgeFile(
-            name=item.get("name", "").strip(),
-            content=item.get("content", ""),
-        )
-        gpt.knowledge_files.append(knowledge_file)
-        for index, chunk in enumerate(chunk_knowledge_text(knowledge_file.content)):
+def _replace_knowledge_files(db: Session, gpt: GPT, files: list[dict]) -> None:
+    kept_ids = [item["id"] for item in files if item.get("id")]
+    
+    files_to_delete = [kf for kf in gpt.knowledge_files if kf.id not in kept_ids]
+    for kf in files_to_delete:
+        db.delete(kf)
+        
+    new_knowledge_files = [kf for kf in gpt.knowledge_files if kf.id in kept_ids]
+    new_files = [item for item in files if not item.get("id")]
+    
+    if not new_files:
+        gpt.knowledge_files = new_knowledge_files
+        return
+        
+    provider_config = gpt.provider if gpt.provider else Provider(kind="openai", api_key_env="OPENAI_API_KEY")
+    provider = get_provider_adapter(provider_config)
+    
+    for item in new_files:
+        knowledge_file = KnowledgeFile(name=item.get("name", "").strip())
+        new_knowledge_files.append(knowledge_file)
+        
+        content = item.get("content", "")
+        chunks = chunk_knowledge_text(content)
+        if not chunks:
+            continue
+            
+        embeddings = provider.embed_texts(chunks)
+        
+        for index, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             knowledge_file.chunks.append(
                 KnowledgeChunk(
                     gpt=gpt,
                     chunk_index=index,
                     content=chunk,
+                    embedding=embedding,
                     char_count=len(chunk),
                 )
             )
+            
+    gpt.knowledge_files = new_knowledge_files
 
 
 def _migrate_legacy_knowledge_payload(db: Session | None, gpt: GPT) -> None:
@@ -408,8 +387,8 @@ def _migrate_legacy_knowledge_payload(db: Session | None, gpt: GPT) -> None:
     if not parsed:
         return
     notes, files = parsed
-    if not gpt.knowledge_files and files:
-        _replace_knowledge_files(gpt, files)
+    if not gpt.knowledge_files and files and db is not None:
+        _replace_knowledge_files(db, gpt, files)
     gpt.knowledge = notes
     if db is not None:
         db.add(gpt)
@@ -469,21 +448,3 @@ def _fixed_size_chunks(text: str) -> list[str]:
     return chunks
 
 
-def _tokenize(text: str) -> set[str]:
-    return {token.lower() for token in TOKEN_RE.findall(text or "") if token.lower() not in STOPWORDS}
-
-
-def _score_chunk(content: str, query_tokens: set[str], query_text: str) -> float:
-    content_lower = content.lower()
-    content_tokens = _tokenize(content)
-    overlap = query_tokens & content_tokens
-    if not overlap:
-        return 0
-
-    score = float(len(overlap) * 4)
-    score += sum(2 for token in overlap if token in content_lower)
-    query_lower = re.sub(r"\s+", " ", query_text.lower()).strip()
-    if len(query_lower) >= 12 and query_lower in re.sub(r"\s+", " ", content_lower):
-        score += 20
-    score += min(len(overlap) / max(len(query_tokens), 1), 1) * 8
-    return score
